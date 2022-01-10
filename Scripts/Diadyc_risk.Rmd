@@ -1,0 +1,259 @@
+---
+title: "Dyadic analysis of risk and protective factors"
+output:
+  word_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(skimr)
+```
+
+## Data
+
+```{r}
+parents <- read_xlsx("../data/Padres.xlsx", skip = 1)
+students <- read_xlsx("../data/EstudiantesREAL.xlsx", skip = 1)
+dicc <- read_xlsx("../data/dictionary.xlsx")
+```
+
+## Dictionary names
+
+```{r}
+
+nn <- tibble(names=names(parents)) %>% 
+  separate(names, c("names", "Q"),  "\r\n", 
+           remove=FALSE) %>% 
+  mutate(Q=ifelse(is.na(Q), "ID", Q)) 
+  
+nn$key <- names(parents)
+  
+dictionary <- inner_join(dicc, nn, by=c("SURVEY_ID"="Q"))
+dc <- setNames(dictionary$key, dictionary$VARNAME)
+
+parents <- parents %>% rename(dc)  %>%
+rename(
+ID=`Código estudiante`,
+GENDER= `Sexo \r\nD1`,
+COMUNIDAD=`Comunidad\r\nD2`,
+GRADE=`Curso actual\r\nD3`,
+AGE=`Edad\r\nD4`,
+CHILDREN=`¿Cuántos hijos/hijas tiene?\r\nD5`,
+PROGRAM_LIFE=`¿Alguna vez ha participado en un programa de formación de familia?\r\nD6`,
+PROGRAM_YEAR=`¿En el úlitmo año ha participado en un programa de formación de familia?\r\nD7`)
+```
+
+## Compute risk factors. 
+
+```{r}
+
+scale_SINO <- function(x){case_when(
+                            x=="Definitivamente sí" ~ 1,
+                            x=="definitivamente si" ~ 1,
+                            x=="Definitivatemente sí" ~1,
+                            x=="definitivaemente si" ~1 ,
+                            x=="Sí" ~ 2,
+                            x=="si" ~ 2,
+                            x=="S" ~ 2,
+                            x=="s" ~ 2,
+                            x=="Si" ~ 2,
+                            x=="no" ~ 3,
+                            x=="No" ~ 3,
+                            x== "N" ~ 3,
+                            x=="Definitivatemente no" ~ 4,
+                            x=="definitivamente no" ~ 4,
+                            x=="Definitivamente no" ~ 4)}
+scale_NADAMAL <- function(x){case_when(x=="Muy mal" ~ 1,
+                                       x=="muy mal" ~ 1,
+                            x=="Mal" ~ 2,
+                            x=="mal" ~ 2,
+                            x=="No tan mal" ~ 3,
+                            x=="no tan mal" ~ 3,
+                            x=="Para nada mal" ~ 4,
+                            x=="para nada mal" ~ 4)}
+scale_MUCHO <- function(x){case_when(
+                             x== "Mucho" ~ 1,
+                             x== "mucho" ~ 1,
+                             x== "Muchas veces" ~ 1,
+                             x== "muchas veces" ~ 1,
+                             x== "Muy interesantes" ~ 1,
+                             x== "muy interesantes" ~ 1,
+                             x== "Muy Importante" ~ 1,
+                             x== "Muy importante" ~ 1,
+                             x== "muy importante" ~ 1,
+                             x== "Muy seguro" ~ 1,
+                             x== "muy seguro" ~ 1,
+                            
+                             x=="Algo" ~ 2,
+                             x=="algo" ~ 2,
+                             x=="Algunas veces" ~ 2,
+                             x=="algunas veces" ~ 2,
+                             x=="Bastante interesantes" ~ 2,
+                             x=="bastante interesantes" ~ 2,
+                             x=="Bastante importantes" ~ 2,
+                             x=="bastante importantes" ~ 2,
+                             x=="Bastante seguro" ~ 2,
+                             x=="bastante seguro" ~ 2,
+                             
+                             x=="Poco" ~ 3,
+                             x=="poco" ~ 3,
+                             x=="Unas pocas veces" ~ 3,
+                             x=="unas pocas veces" ~ 3,
+                             x=="Un poco interesantes" ~ 3,
+                             x=="un poco interesantes" ~ 3,
+                             x=="Un poco importantes" ~ 3,
+                             x=="un poco importantes" ~ 3,
+                             x=="Un poco seguro" ~ 3,
+                             x=="un poco seguro" ~ 3,
+                            
+                             x=="Nada" ~ 4,
+                             x=="nada" ~ 4,
+                             x=="Nunca" ~ 4,
+                             x=="nunca" ~ 4,
+                             x=="Un poco aburridas" ~ 4,
+                             x=="un poco aburridas" ~ 4,
+                             x=="Para nada importante" ~ 4,
+                             x=="para nada importante" ~ 4,
+                             x=="Para nada seguro" ~ 4,
+                             x=="para nada seguro" ~ 4,
+                            
+                             x=="Muy aburridas" ~ 5
+                             )}
+scale_RIESGO <- function(x){case_when(
+                            toupper(x)=="SIN RIESGO" ~ 4,
+                            toupper(x)=="RIESGO LEVE" ~ 3,
+                            toupper(x)=="RIESGO MODERADO" ~ 2,
+                            toupper(x)=="GRAN RIESGO" ~ 1)
+  
+}
+scale_POPULAR <- function(x){case_when(
+                            toupper(x)=="MUY POPULAR" ~ 4,
+                            toupper(x)=="POPULAR" ~ 3,
+                            toupper(x)=="PIPULAR" ~ 3,
+                            toupper(x)=="POCO POPULAR" ~ 2,
+                            toupper(x)=="POCO POPULR" ~ 2,
+                            toupper(x)=="PARA NADA POPULAR" ~ 1)
+  
+}
+scale_AMIGOS<- function(x){case_when(
+                            toupper(x)=="NINGUNO" ~ 0,
+                            toupper(x)=="UNO O DOS" ~ 1,
+                            toupper(x)=="ALGUNOS" ~ 2,
+                            toupper(x)=="LA MAYORIA" ~ 3,
+                            toupper(x)=="LA MAYORÍA" ~ 3,
+                            toupper(x)=="TODOS" ~ 4)
+  
+}
+
+sino <- dicc %>% filter(SCALE=="SINO") %>% pull(VARNAME)
+nadamal <- dicc %>% filter(SCALE=="NADAMAL") %>% pull(VARNAME)
+mucho <- dicc %>% filter(SCALE=="MUCHO") %>% pull(VARNAME)
+riesgo <- dicc %>% filter(SCALE=="RIESGO") %>% pull(VARNAME)
+popular <- dicc %>% filter(SCALE=="POPULAR") %>% pull(VARNAME)
+amigos <- dicc %>% filter(SCALE=="AMIGOS") %>% pull(VARNAME)
+
+p <- parents %>% 
+  mutate(across(sino, scale_SINO,.names = '{col}_N')) %>% 
+  select(c(sino, paste0(sino, "_N"))) 
+  
+map2(c(1:35),c(36:70), ~table(p[[.x]], p[[.y]]))
+
+n <- parents %>% 
+  mutate(across(nadamal, scale_NADAMAL,.names = '{col}_N')) %>% 
+  select(c(nadamal, paste0(nadamal, "_N"))) 
+  
+map2(c(1:12),c(13:24), ~table(n[[.x]], n[[.y]]))
+
+
+m <- parents %>% 
+  mutate(across(mucho, scale_MUCHO,.names = '{col}_N')) %>% 
+  select(c(mucho, paste0(mucho, "_N"))) 
+  
+map2(c(1:5),c(6:10), ~table(m[[.x]], m[[.y]]))
+
+r <- parents %>% 
+  mutate(across(riesgo, scale_RIESGO,.names = '{col}_N')) %>% 
+  select(c(riesgo, paste0(riesgo, "_N"))) 
+  
+map2(c(1:4),c(5:8), ~table(r[[.x]], r[[.y]]))
+
+
+po <- parents %>% 
+  mutate(across(popular, scale_POPULAR,.names = '{col}_N')) %>% 
+  select(c(popular, paste0(popular, "_N"))) 
+  
+map2(c(1:4),c(5:8), ~table(po[[.x]], po[[.y]]))
+
+a <- parents %>% 
+  mutate(across(amigos, scale_AMIGOS,.names = '{col}_N')) %>% 
+  select(c(amigos, paste0(amigos, "_N"))) 
+  
+map2(c(1:5),c(6:10), ~table(a[[.x]], a[[.y]]))
+
+```
+
+
+
+```{r}
+
+parents_n <- parents %>% 
+  mutate(across(sino, scale_SINO,.names = '{col}_N')) %>% 
+  mutate(across(nadamal, scale_NADAMAL,.names = '{col}_N')) %>% 
+  mutate(across(mucho, scale_MUCHO,.names = '{col}_N')) %>% 
+  mutate(across(riesgo, scale_RIESGO,.names = '{col}_N')) %>% 
+  mutate(across(popular, scale_POPULAR,.names = '{col}_N')) %>% 
+  mutate(across(amigos, scale_AMIGOS,.names = '{col}_N'))
+
+parents_n <- parents_n %>% 
+  pivot_longer(contains("_N"), values_to = "answer", names_to = "VARNAME") %>% 
+  select(VARNAME, answer, everything()) %>% 
+  mutate(VARNAME=str_remove_all(VARNAME, "_N"))
+
+p <-  left_join(parents_n, dictionary) %>% 
+  select(answer, FACTOR_EN, FACTORNAME, VARNAME, PARENT_EN)
+  
+ 
+library(skimr)
+
+p %>% group_by(FACTOR_EN, FACTORNAME,VARNAME, PARENT_EN) %>% skim() 
+
+
+```
+
+# Reliability
+
+```{r}
+library(psych)
+
+
+m <- p %>% select(FACTORNAME, answer,VARNAME) %>% 
+  group_split(FACTORNAME) 
+
+
+  
+  
+map(m, ~ (pivot_wider(.x, names_from=3,values_from= 2))
+  
+lapply(1:length(m), 
+function(x) (pivot_wider(m[[1]], names_from = "VARNAMES", values_from = "answer")))
+
+m[[1]]
+
+f[[1]][[1]]
+
+map(f, ~psych::cronbach(.x[[1]][[1]]))
+
+alpha(p$answer)
+
+  
+
+```
+
