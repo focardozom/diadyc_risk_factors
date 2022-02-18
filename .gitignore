@@ -7,3 +7,7 @@ project.Rproj
 
 /data
 
+*.html
+*.csv
+*.docx
+
