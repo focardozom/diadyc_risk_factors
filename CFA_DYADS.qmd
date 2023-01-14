@@ -1,0 +1,497 @@
+---
+title: "Dyadic analsysis CFA"
+format: 
+  html:
+    toc: true
+    code-fold: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r libraries}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(lavaan)
+library(kableExtra)
+library(reactable)
+```
+
+```{r inport-data}
+
+dyads <- tibble(readRDS("dyads.Rds"))
+
+```
+
+```{r number-question}
+#| eval: false
+
+dyads %>% select(VARNAME) %>% unique %>% view
+dyads %>% select(FACTORNAME) %>% unique %>% view
+
+```
+
+```{r factor-names}
+#| echo: false
+
+factors <- c("CRCDO", "CRPAD",  "CRLNFD","CPNA", 
+             "FRPFM",  "FRFC", "FRPFD", "FPATT",
+             "PRPRD", "PRFAD", "PRRAI","PPIPP",
+             "SRLCS")
+
+dicc_factors <- 
+c("CPNA" = "Community Cohesion",
+"CRCDO" = "Community Disorganization",
+"CRLNFD" = "Laws and Norms Favorable to Drug Use",
+"CRPAD" = "Drug Availability",
+"FPATT" = "Family Cohesion",
+"FRFC" = "Family Conflict",
+"FRPFD" = "Favorable attitudes of parents towards drug use",
+"FRPFM" = "Poor Family Management",
+"PPIPP" = "Interaction with prosocial peers",
+"PRFAD" = "Favorable attitudes towards drug use",
+"PRPRD" = "Perceived Risks of Drug Use",
+"PRRAI" = "Rewards for antisocial involvement",
+"SRLCS" = "Commitment to the school")
+
+```
+
+```{r df-completed-data}
+cfa_complete  <- dyads %>% filter(FACTORNAME %in% factors) %>% 
+   select(ID, MEMBER, VARNAME, answer) %>% 
+  pivot_wider(names_from = VARNAME , values_from = answer,
+              id_cols = c("ID", "MEMBER"))
+```
+
+```{r df-by-group}
+cfa_parent  <- dyads %>% 
+  filter(FACTORNAME %in% factors) %>% 
+  filter(MEMBER=="Parent") %>% 
+  select(ID, MEMBER, VARNAME, answer) %>% 
+  pivot_wider(names_from = VARNAME , values_from = answer,
+              id_cols = c("ID", "MEMBER"))
+
+cfa_child  <- dyads %>% 
+  filter(FACTORNAME %in% factors) %>% 
+  filter(MEMBER=="Student") %>% 
+   select(ID, MEMBER, VARNAME, answer) %>% 
+  pivot_wider(names_from = VARNAME , values_from = answer,
+              id_cols = c("ID", "MEMBER"))
+```
+
+# CFA models
+
+```{r, define-models, comment=''}
+#| echo: true
+# Community Cohesion
+cfa_CPNA   <- 'CPNA =~ OUTNH + MISSNH + CARENH + CAREOTH + PEOPLE'
+
+# Community Disorganization
+cfa_CRCOD  <- 'CRCDO =~  SAFENH + NHDELIN + NHVENTA + NHFIGHT + NHEMPTY + NHGRAF'
+
+# Laws and Norms Favorable to Drug Use
+cfa_CRLNFD <- 'CRLNFD =~ POLALC + POLMAR + POLGUN + POLCIG + AWRMAR + AWRALC + AWRCIG + AWBOR' 
+
+# Drug Availability
+cfa_CRPAD  <- ' CRPAD =~  GETCIG + GETALC + GETMAR + GETDRUG'
+
+# Poor Family Management
+cfa_FPATT  <- 'FPATT =~  CLSFAM + SHRPADRE + SHRHERMN + FAMHACER'
+
+# Family Conflict
+cfa_FRFC   <- 'FRFC =~  ARGUE + SERARG + FAMYELL + GRITAR + CONFLICT'
+
+#Favorable attitudes of parents towards drug use
+cfa_FRPFD  <- 'FRPFD =~ WRPRALC + WRPRCIG + WRPRMAR + WRBORR'
+
+#Family Cohesion
+cfa_FRPFM  <- 'FRPFM =~  CATCHAL + CATCHSK + CLRRULE + CMHOME + FAMRULE + HMWORK + PARKNOW'
+
+# Perceived Risks of Drug Use
+cfa_PPIPP  <- 'PPIPP =~ FRCLUB + FRCOM + FRLKSCH + FRREL + FRSCH'
+
+# Favorable attitudes towards drug use
+cfa_PRFAD  <- 'PRFAD =~ WRALC +  WRCIG + WRMAR + WRDRUG'
+
+# Rewards for antisocial involvement
+cfa_PRPRD  <- 'PRPRD =~ HMALC  + HMCIG + HMMARO + HMMARR'
+
+# Interaction with prosocial peers
+cfa_PRRAI  <- 'PRRAI =~ COOLCIG + COOLALC + COOLMAR + COOLGUN'
+
+# Commitment to the school
+cfa_SRLCS  <- 'SRLCS =~ ENJSCH + SCHMEJOR + SCHINT + SCHLRN +SAFESCH' 
+```
+
+```{r name-models}
+#| echo: false
+models <- list(cfa_CPNA, cfa_CRCOD,  cfa_CRLNFD, cfa_CRPAD, 
+               cfa_FRPFM, cfa_FRFC, cfa_FRPFD, cfa_FPATT,   
+               cfa_PRPRD, cfa_PRFAD, cfa_PRRAI, cfa_PPIPP, 
+               cfa_SRLCS)
+
+names(models) <- c("Community Cohesion",
+                   "Community Disorganization",
+                   "Laws and Norms Favorable to Drug Use",
+                   "Drug Availability",
+                   "Poor Family Management",
+                   "Family Conflict",
+                   "Favorable attitudes of parents towards drug use",
+                   "Family Cohesion",
+                   "Perceived Risks of Drug Use",
+                   "Favorable attitudes towards drug use",
+                   "Rewards for antisocial involvement",
+                   "Interaction with prosocial peers",
+                   "Commitment to the school")
+```
+
+# Estimate models as categorical
+
+```{r extract-fit}
+#| echo: false
+# cfa_continous <-
+# function(x, y){
+# fit1 <- cfa(x, data=y)
+# fitMeasures(fit1, c("chisq","df","pvalue" , "cfi", "tli" ,"rmsea"))
+# }
+
+cfa_categorical <-
+function(x, y){
+fit1 <- cfa(x, data=y, ordered = TRUE)
+fitMeasures(fit1, c("chisq","df","pvalue" , "cfi", "tli" ,"rmsea"))
+}
+```
+
+
+# Complete sample (parent-child together)
+```{r}
+#| echo: false
+#models_fit_continous <- map_dfr(models, cfa_continous, cfa_complete, .id="names")
+models_fit_categorical <- map_dfr(models, cfa_categorical,cfa_complete, .id="names")
+```
+
+```{r table-model-complete}
+
+models_fit_categorical %>% 
+  mutate(across(!is.character, as.numeric)) %>% 
+  reactable(columns = list(
+    chisq = colDef(format = colFormat(digits = 3)),
+    pvalue =colDef(format = colFormat(digits = 3)),
+      cfi=colDef(format = colFormat(digits = 3)),
+      tli=colDef(format = colFormat(digits = 3)),
+      rmsea=colDef(format = colFormat(digits = 3))
+  ))
+  
+
+
+```
+
+
+# Only Parents
+
+```{r}
+#| echo: false
+# models_fit_continous_parent <- map_dfr(models, cfa_continous, cfa_parent, .id="names")
+models_fit_categorical_parent <- map_dfr(models, cfa_categorical,cfa_parent, .id="names") 
+
+```
+
+```{r table-model-parent}
+#| echo: false
+models_fit_categorical_parent %>% 
+    mutate(across(!is.character, as.numeric)) %>% 
+  reactable(columns = list(
+    chisq = colDef(format = colFormat(digits = 3)),
+    pvalue =colDef(format = colFormat(digits = 3)),
+      cfi=colDef(format = colFormat(digits = 3)),
+      tli=colDef(format = colFormat(digits = 3)),
+      rmsea=colDef(format = colFormat(digits = 3))
+  ))
+```
+
+# Only Child
+
+```{r}
+#| echo: false
+#models_fit_continous_child <- map_dfr(models, cfa_continous, cfa_child, .id="names")
+models_fit_categorical_child <- map_dfr(models, cfa_categorical,cfa_child, .id="names")
+
+```
+
+```{r table-model-complete-child}
+#| echo: false
+models_fit_categorical_child %>% 
+  mutate(across(!is.character, as.numeric)) %>% 
+  reactable(columns = list(
+    chisq = colDef(format = colFormat(digits = 3)),
+    pvalue =colDef(format = colFormat(digits = 3)),
+      cfi=colDef(format = colFormat(digits = 3)),
+      tli=colDef(format = colFormat(digits = 3)),
+      rmsea=colDef(format = colFormat(digits = 3))
+  ))
+```
+
+
+## Visual comparison
+
+```{r tables-to-fit-comparison}
+tab_parent <- models_fit_categorical_parent %>% 
+    mutate(across(!is.character, as.numeric)) %>% 
+    mutate(Member="Parent")
+tab_student <- models_fit_categorical_child %>% 
+  mutate(across(!is.character, as.numeric)) %>% 
+  mutate(Member="Student")
+
+to_cfa_fit_table <- bind_rows(tab_parent, tab_student)
+```
+
+```{r}
+library(ggrepel)
+
+to_cfa_fit_table %>% pivot_wider(names_from = Member, values_from = cfi, id_cols = names) %>% 
+  ggplot(aes(Parent, Student, label=names)) +
+  geom_point() +
+  geom_label_repel(box.padding = 2.3, max.overlaps = Inf, size=4) +
+  geom_abline(intercept = 0, slope = 1, size = 0.5) 
+  
+
+```
+
+# Estimate multigroup analysis
+
+```{r}
+#| echo: false
+cfa_dyadic <- 
+  cfa_complete %>% 
+  mutate(MEMBER= if_else(MEMBER=="Parent", "P", "S")) %>% 
+  pivot_wider(names_from = MEMBER, 
+              values_from = -c(ID, MEMBER))
+```
+
+
+```{r}
+cfa_CPNA   <- 'CPNA_P =~ OUTNH_P + MISSNH_P + CARENH_P + CAREOTH_P + PEOPLE_P
+               CPNA_S =~ OUTNH_S + MISSNH_S + CARENH_S + CAREOTH_S + PEOPLE_S
+               CPNA_P ~~ CPNA_S
+               OUTNH_P ~~ OUTNH_S
+               MISSNH_P ~~ MISSNH_S
+               CARENH_P ~~ CARENH_S
+               CAREOTH_P ~~ CAREOTH_S
+               PEOPLE_P ~~ PEOPLE_S
+                '
+
+cfa(cfa_CPNA, data=cfa_dyadic, estimator = "WLSMV",
+            ordered = TRUE,
+            std.lv=T,
+    mimic="Mplus") %>% 
+  fitmeasures(.,c("chisq","df","pvalue" , "cfi", "tli" ,"rmsea"))
+
+summary(cfa(cfa_CPNA, data=cfa_dyadic, 
+            estimator = "WLSMV",
+            ordered = TRUE,
+            std.lv=T,
+            mimic="Mplus"))
+
+```
+
+
+```{r}
+
+# Community Cohesion
+to_CPNA   <- cfa_dyadic %>% select(OUTNH_P, MISSNH_P, CARENH_P, CAREOTH_P, PEOPLE_P,
+                                   OUTNH_S, MISSNH_S, CARENH_S, CAREOTH_S, PEOPLE_S)
+
+# Community Disorganization
+to_CRCOD  <- cfa_dyadic %>% select(SAFENH_P, NHDELIN_P, NHVENTA_P, NHFIGHT_P, NHEMPTY_P, NHGRAF_P,
+                                    SAFENH_S, NHDELIN_S, NHVENTA_S, NHFIGHT_S, NHEMPTY_S, NHGRAF_S)
+
+# Laws and Norms Favorable to Drug Use
+to_CRLNFD <- cfa_dyadic %>% select(POLALC_P, POLMAR_P, POLGUN_P, POLCIG_P, AWRMAR_P, AWRALC_P, AWRCIG_P,AWBOR_P,
+                                    POLALC_S, POLMAR_S, POLGUN_S, POLCIG_S, AWRMAR_S, AWRALC_S, AWRCIG_S,AWBOR_S)
+
+# Drug Availability
+to_CRPAD  <- cfa_dyadic %>% select(GETCIG_P , GETALC_P, GETMAR_P, GETDRUG_P,
+                                    GETCIG_S , GETALC_S, GETMAR_S, GETDRUG_S)
+
+# Poor Family Management
+to_FPATT  <- cfa_dyadic %>% select(CLSFAM_P, SHRPADRE_P ,SHRHERMN_P , FAMHACER_P,
+                                    CLSFAM_S, SHRPADRE_S ,SHRHERMN_S , FAMHACER_S)
+
+# Family Conflict
+to_FRFC   <- cfa_dyadic %>% select(ARGUE_P, SERARG_P ,FAMYELL_P ,GRITAR_P ,CONFLICT_P,
+                                    ARGUE_S, SERARG_S ,FAMYELL_S ,GRITAR_S ,CONFLICT_S)
+
+#Favorable attitudes of parents towards drug use
+to_FRPFD  <- cfa_dyadic %>% select( WRPRALC_P,  WRPRCIG_P ,WRPRMAR_P , WRBORR_P,
+                                     WRPRALC_S,  WRPRCIG_S ,WRPRMAR_S , WRBORR_S)
+
+#Family Cohesion
+to_FRPFM  <- cfa_dyadic %>% 
+  select(CATCHAL_P, CATCHSK_P, CLRRULE_P, CMHOME_P, FAMRULE_P, HMWORK_P, PARKNOW_P,
+         CATCHAL_S, CATCHSK_S, CLRRULE_S, CMHOME_S, FAMRULE_S, HMWORK_S, PARKNOW_S)
+
+
+to_PPIPP  <- cfa_dyadic %>% select(FRCLUB_P, FRCOM_P, FRLKSCH_P, FRREL_P, FRSCH_P,
+                                    FRCLUB_S, FRCOM_S, FRLKSCH_S, FRREL_S, FRSCH_S)
+
+
+to_PRFAD  <- cfa_dyadic %>% select( WRALC_P,  WRCIG_P,  WRMAR_P,  WRDRUG_P,
+                                     WRALC_S,  WRCIG_S,  WRMAR_S,  WRDRUG_S)
+
+# Perceived Risks of Drug Use
+to_PRPRD  <- cfa_dyadic %>% select( HMALC_P, HMCIG_P,  HMMARO_P, HMMARR_P,
+                                     HMALC_S, HMCIG_S,  HMMARO_S, HMMARR_S)
+
+
+to_PRRAI  <- cfa_dyadic %>% select( COOLCIG_P,  COOLALC_P, COOLMAR_P,  COOLGUN_P,
+                                     COOLCIG_S,  COOLALC_S, COOLMAR_S,  COOLGUN_S)
+
+
+tp_SRLCS  <- cfa_dyadic %>% select(ENJSCH_P,  SCHMEJOR_P, SCHINT_P, SCHLRN_P  , SAFESCH_P,
+                                    ENJSCH_S,  SCHMEJOR_S, SCHINT_S, SCHLRN_S  , SAFESCH_S) 
+
+library(MplusAutomation)
+
+to_CPNA[is.na(to_CPNA)] <- 999
+prepareMplusData(to_CPNA, "to_CPNA.dta")
+
+to_CRCOD[is.na(to_CRCOD)] <- 999
+prepareMplusData(to_CRCOD, "to_CRCOD.dta")
+
+to_CRLNFD
+to_CRLNFD[is.na(to_CRLNFD)] <- 999
+prepareMplusData(to_CRLNFD, "to_CRLNFD")
+
+to_CRPAD
+to_CRPAD[is.na(to_CRPAD)] <- 999
+prepareMplusData(to_CRPAD, "to_CRPAD")
+
+to_FPATT
+to_FPATT[is.na(to_FPATT)] <- 999
+prepareMplusData(to_FPATT, "to_FPATT.dat")
+
+to_FRFC
+to_FRFC[is.na(to_FRFC)] <- 999
+prepareMplusData(to_FRFC, "to_FRFC.dta")
+
+to_FRPFD
+to_FRPFD[is.na(to_FRPFD)] <- 999
+prepareMplusData(to_FRPFD, "to_FRPFD.dta")
+
+to_FRPFM
+to_FRPFM[is.na(to_FRPFM)] <- 999
+prepareMplusData(to_FRPFM, "to_FRPFM.dta")
+
+to_PPIPP
+to_PPIPP[is.na(to_PPIPP)] <- 999
+prepareMplusData(to_PPIPP, "to_PPIPP.dta")
+
+to_PRFAD
+to_PRFAD[is.na(to_PRFAD)] <- 999
+prepareMplusData(to_PRFAD, "to_PRFAD.dta")
+
+to_PRPRD
+to_PRPRD[is.na(to_PRPRD)] <- 999
+prepareMplusData(to_PRPRD, "to_PRPRD.dta")
+
+to_PRRAI
+to_PRRAI[is.na(to_PRRAI)] <- 999
+prepareMplusData(to_PRRAI, "to_PRRAI.dta")
+
+tp_SRLCS
+tp_SRLCS[is.na(tp_SRLCS)] <- 999
+prepareMplusData(tp_SRLCS, "tp_SRLCS.dta")
+```
+
+
+## To ACE model
+
+# sex-table
+
+```{r}
+library(table1)
+library(gt)
+dyads %>% 
+  group_by(ID, MEMBER) %>% 
+  mutate(n=row_number()) %>% 
+  filter(n==1) %>% 
+  mutate(GENDER= case_when(GENDER=="f" ~ "Femenino",
+                           GENDER=="m" ~ "Masculino",
+                           TRUE ~ GENDER)) %>% 
+  select(MEMBER, GENDER) %>% arrange(ID) %>% 
+  pivot_wider(names_from = MEMBER, 
+              values_from = GENDER, 
+              id_cols = ID) %>% 
+  ungroup() %>% 
+  count(Parent, Student)
+  
+```
+
+
+```{r}
+same_dyad <- dyads %>% 
+  group_by(ID, MEMBER) %>% 
+  mutate(n=row_number()) %>% 
+  filter(n==1) %>% 
+  mutate(GENDER= case_when(GENDER=="f" ~ "Femenino",
+                           GENDER=="m" ~ "Masculino",
+                           TRUE ~ GENDER)) %>% 
+  select(MEMBER, GENDER) %>% arrange(ID) %>% 
+  pivot_wider(names_from = MEMBER, 
+              values_from = GENDER, 
+              id_cols = ID) %>% 
+  mutate(same=case_when(Parent==Student ~ 1,
+                        TRUE ~ 0))
+
+```
+
+```{r}
+
+# Perceived Risks of Drug Use
+to_PRPRD  <- cfa_dyadic %>% select(ID, HMALC_P, HMCIG_P,  HMMARO_P, HMMARR_P,
+                                     HMALC_S, HMCIG_S,  HMMARO_S, HMMARR_S)
+
+to_mplus_ace <- to_PRPRD %>% left_join(., same_dyad) %>% 
+  select(-ID, -Parent, - Student)
+
+to_mplus_ace[is.na(to_mplus_ace)] <- 999
+prepareMplusData(to_mplus_ace, "to_mplus_ace.dta")
+```
+
+
+# Read models
+
+```{r}
+
+results <- readModels("ace_dyadic_CAT.out")
+
+```
+
+```{r}
+dyads %>% group_by(MEMBER) %>% 
+  summarise(age=mean(AGE, na.rm=T),
+            sd=sd(AGE, na.rm = T),
+            n=n())
+
+```
+
+
+# Invariance
+```{r}
+
+to_invariance <- 
+  cfa_complete %>% 
+  mutate(parent= if_else(MEMBER=="Parent", 1, 0)) %>% 
+  select(HMALC,HMCIG, HMMARO, HMMARR, parent)
+
+to_invariance[is.na(to_invariance)] <- 999
+prepareMplusData(to_invariance, "to_invariance_ace.dta")
+
+```
+
+# CFA in mplus
+
+```{r}
+
+```
+
