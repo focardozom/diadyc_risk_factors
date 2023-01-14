@@ -2,12 +2,9 @@
 .Rhistory
 .RData
 .Ruserdata
-
 project.Rproj
-
 /data
-
 *.html
 *.csv
 *.docx
-
+diadyc_risk_factors.Rproj
